@@ -1,32 +1,6 @@
-require('dotenv').config();
+const app = require('./app');
 
-const express = require('express');
-const cors = require('cors');
-
-const resources = require('./config/resources');
-const buildResourceRouter = require('./routes/resourceRoutes');
-const { errorHandler, notFound } = require('./middleware/errorHandler');
-
-const app = express();
 const PORT = process.env.PORT || 3000;
-
-// Core middleware
-app.use(cors());
-app.use(express.json());
-
-// Health check
-app.get('/health', (req, res) => {
-  res.json({ success: true, message: 'Server is up' });
-});
-
-// Routes
-resources.forEach(({ table, path, writable }) => {
-  app.use(`/api/${path}`, buildResourceRouter(table, { writable }));
-});
-
-// 404 + error handling (must be registered last)
-app.use(notFound);
-app.use(errorHandler);
 
 app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
