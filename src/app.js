@@ -10,7 +10,7 @@ const { errorHandler, notFound } = require('./middleware/errorHandler');
 const app = express();
 
 // Core middleware
-app.use(cors());
+app.use(cors({ origin: ['http://localhost:5173'] }));
 app.use(express.json());
 
 // Health check
