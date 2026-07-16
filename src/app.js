@@ -10,7 +10,10 @@ const { errorHandler, notFound } = require('./middleware/errorHandler');
 const app = express();
 
 // Core middleware
-app.use(cors({ origin: ['https://vaelorafe.netlify.app'] }));
+app.use(cors({ origin: [
+  'https://vaelorafe.netlify.app',
+  'http://localhost:4000',
+]}));
 app.use(express.json());
 
 // Health check
