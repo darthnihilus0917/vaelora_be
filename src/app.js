@@ -15,6 +15,7 @@ const app = express();
 app.use(cors({ origin: [
   'https://vaelorafe.netlify.app',
   'http://localhost:4000',
+  'http://localhost:5173',
 ]}));
 app.use(express.json());
 
