@@ -5,6 +5,8 @@ const cors = require('cors');
 
 const resources = require('./config/resources');
 const buildResourceRouter = require('./routes/resourceRoutes');
+const reportsRoutes = require('./routes/reportsRoutes');
+const inventoryItemExtraRoutes = require('./routes/inventoryItemExtraRoutes');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 
 const app = express();
@@ -22,6 +24,9 @@ app.get('/health', (req, res) => {
 });
 
 // Routes
+app.use('/api/reports', reportsRoutes);
+app.use('/api/inventory-items', inventoryItemExtraRoutes);
+
 resources.forEach(({ table, path, writable }) => {
   app.use(`/api/${path}`, buildResourceRouter(table, { writable }));
 });
