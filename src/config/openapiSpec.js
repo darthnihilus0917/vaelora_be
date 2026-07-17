@@ -222,6 +222,162 @@ const inventoryItemExtraPaths = {
   },
 };
 
+const brandRecord = {
+  type: 'object',
+  properties: {
+    id: { type: 'integer' },
+    name: { type: 'string' },
+    slug: { type: 'string', nullable: true },
+    description: { type: 'string', nullable: true },
+    is_active: { type: 'boolean' },
+    created_at: { type: 'string', format: 'date-time' },
+    updated_at: { type: 'string', format: 'date-time' },
+    product_count: { type: 'integer', description: 'Number of products linked via products.brand_id' },
+  },
+};
+
+const brandsPaths = {
+  '/brands': {
+    get: {
+      tags: ['brands'],
+      summary: 'List brands',
+      description: 'No page/limit/sortBy -> plain array. Pass any of them to get { items, page, limit, total, totalPages } instead.',
+      parameters: [
+        { name: 'search', in: 'query', schema: { type: 'string' }, description: 'Case-insensitive match on name' },
+        { name: 'is_active', in: 'query', schema: { type: 'boolean' } },
+        { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+        { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        { name: 'sortBy', in: 'query', schema: { type: 'string' }, description: 'Any brands column (product_count is computed, not sortable)' },
+        { name: 'sortOrder', in: 'query', schema: { type: 'string', enum: ['asc', 'desc'], default: 'asc' } },
+      ],
+      responses: {
+        200: {
+          description: 'OK',
+          content: {
+            'application/json': {
+              schema: SuccessEnvelope({ oneOf: [{ type: 'array', items: brandRecord }, paginatedEnvelope(brandRecord)] }),
+            },
+          },
+        },
+      },
+    },
+    post: {
+      tags: ['brands'],
+      summary: 'Create a brand',
+      description: 'slug is auto-generated from name if omitted.',
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['name'],
+              properties: {
+                name: { type: 'string' },
+                slug: { type: 'string' },
+                description: { type: 'string' },
+                is_active: { type: 'boolean', default: true },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        201: { description: 'Created', content: { 'application/json': { schema: SuccessEnvelope(brandRecord) } } },
+        400: errorResponses[400],
+      },
+    },
+  },
+  '/brands/{id}': {
+    get: {
+      tags: ['brands'],
+      summary: 'Get a single brand by id',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(brandRecord) } } },
+        404: errorResponses[404],
+      },
+    },
+    put: {
+      tags: ['brands'],
+      summary: 'Full update of a brand',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['name'],
+              properties: {
+                name: { type: 'string' },
+                slug: { type: 'string' },
+                description: { type: 'string' },
+                is_active: { type: 'boolean' },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(brandRecord) } } },
+        400: errorResponses[400],
+        404: errorResponses[404],
+      },
+    },
+    patch: {
+      tags: ['brands'],
+      summary: 'Partial update of a brand (e.g. toggling is_active)',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                slug: { type: 'string' },
+                description: { type: 'string' },
+                is_active: { type: 'boolean' },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(brandRecord) } } },
+        400: errorResponses[400],
+        404: errorResponses[404],
+      },
+    },
+    delete: {
+      tags: ['brands'],
+      summary: 'Delete a brand',
+      description: 'Fails with 409 if the brand still has products (products.brand_id is ON DELETE RESTRICT) — deactivate instead.',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+      responses: {
+        200: {
+          description: 'OK',
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: { success: { type: 'boolean', example: true }, message: { type: 'string', example: 'Record 1 deleted from brands' } },
+              },
+            },
+          },
+        },
+        400: errorResponses[400],
+        409: {
+          description: 'Conflict — brand still has linked products',
+          content: { 'application/json': { schema: ErrorEnvelope } },
+        },
+      },
+    },
+  },
+};
+
 // /health is mounted outside the /api prefix, so it needs its own server override.
 const healthPath = {
   '/health': {
@@ -257,11 +413,13 @@ const openapiSpec = {
   servers: [{ url: '/api' }],
   tags: [
     { name: 'health' },
+    { name: 'brands' },
     ...resources.map((r) => ({ name: r.path })),
     { name: 'reports' },
   ],
   paths: {
     ...healthPath,
+    ...brandsPaths,
     ...resourcePaths,
     ...reportsPaths,
     ...inventoryItemExtraPaths,
