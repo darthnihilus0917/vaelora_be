@@ -23,6 +23,27 @@ const errorResponses = {
 
 const genericRecord = { type: 'object', additionalProperties: true };
 
+const paginatedEnvelope = (itemSchema) => ({
+  type: 'object',
+  properties: {
+    items: { type: 'array', items: itemSchema },
+    page: { type: 'integer', example: 1 },
+    limit: { type: 'integer', example: 20 },
+    total: { type: 'integer', example: 42 },
+    totalPages: { type: 'integer', example: 3 },
+  },
+});
+
+// Pagination/sorting is opt-in on every generic list endpoint: only kicks in
+// once page, limit, or sortBy is sent. Omitting all three keeps returning the
+// plain array shape, so existing callers (e.g. dropdown lookups) are unaffected.
+const paginationParams = [
+  { name: 'page', in: 'query', schema: { type: 'integer', default: 1 }, description: 'Enables pagination when set (along with limit/sortBy)' },
+  { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+  { name: 'sortBy', in: 'query', schema: { type: 'string' }, description: 'Any column on the table/view' },
+  { name: 'sortOrder', in: 'query', schema: { type: 'string', enum: ['asc', 'desc'], default: 'asc' } },
+];
+
 // One CRUD resource entry becomes 1-5 OpenAPI operations, mirroring exactly
 // what buildResourceRouter (src/routes/resourceRoutes.js) wires up for it.
 function buildResourcePaths({ table, path, writable }) {
@@ -35,10 +56,18 @@ function buildResourcePaths({ table, path, writable }) {
     get: {
       tags: [tag],
       summary: `List all ${table}`,
+      description: 'No query params -> plain array. Pass page/limit/sortBy to get { items, page, limit, total, totalPages } instead.',
+      parameters: paginationParams,
       responses: {
         200: {
           description: 'OK',
-          content: { 'application/json': { schema: SuccessEnvelope({ type: 'array', items: genericRecord }) } },
+          content: {
+            'application/json': {
+              schema: SuccessEnvelope({
+                oneOf: [{ type: 'array', items: genericRecord }, paginatedEnvelope(genericRecord)],
+              }),
+            },
+          },
         },
       },
     },
@@ -140,6 +169,8 @@ const reportsPaths = {
         { name: 'is_discontinued', in: 'query', schema: { type: 'boolean' } },
         { name: 'profitability', in: 'query', schema: { type: 'string', enum: ['profitable', 'loss'] } },
         { name: 'costKnown', in: 'query', schema: { type: 'boolean' } },
+        { name: 'sortBy', in: 'query', schema: { type: 'string', enum: ['sold_date', 'selling_price', 'acquisition_cost', 'fees', 'shipping', 'gross_profit', 'net_profit', 'roi', 'days_held', 'brand', 'sku', 'model_no', 'product_name', 'marketplace_name'] }, description: 'Defaults to sold_date' },
+        { name: 'sortOrder', in: 'query', schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' } },
       ],
       responses: { 200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(genericRecord) } } } },
     },
@@ -148,6 +179,13 @@ const reportsPaths = {
     get: {
       tags: ['reports'],
       summary: 'Per-item aging breakdown for available inventory, bucketed by days held',
+      description: 'buckets/capital_locked always reflect the full available-inventory set, independent of pagination on items. No page/limit -> items is the full unpaginated list.',
+      parameters: [
+        { name: 'page', in: 'query', schema: { type: 'integer', default: 1 }, description: 'Enables pagination when set (along with limit)' },
+        { name: 'limit', in: 'query', schema: { type: 'integer', default: 20 } },
+        { name: 'sortBy', in: 'query', schema: { type: 'string', enum: ['days_held', 'acquisition_cost', 'current_price', 'potential_margin', 'brand', 'sku', 'model_no', 'product_name', 'purchase_date'] }, description: 'Defaults to days_held' },
+        { name: 'sortOrder', in: 'query', schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' } },
+      ],
       responses: { 200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(genericRecord) } } } },
     },
   },

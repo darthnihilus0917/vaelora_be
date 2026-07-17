@@ -27,6 +27,24 @@ function monthLabel(dateStr) {
   return dateStr ? String(dateStr).slice(0, 7) : 'unknown';
 }
 
+// Sorts an in-memory row array by one of a whitelisted set of fields. Falls
+// back to defaultSortBy when sortBy is missing/not allowed, so callers always
+// get a deterministic order (pagination without one is unreliable).
+function sortRows(rows, { sortBy, sortOrder, allowedFields, defaultSortBy }) {
+  const field = allowedFields.includes(sortBy) ? sortBy : defaultSortBy;
+  const direction = sortOrder === 'asc' ? 1 : -1;
+
+  return [...rows].sort((a, b) => {
+    const av = a[field];
+    const bv = b[field];
+    if (av === null || av === undefined) return 1;
+    if (bv === null || bv === undefined) return -1;
+    if (av < bv) return -1 * direction;
+    if (av > bv) return 1 * direction;
+    return 0;
+  });
+}
+
 // Flattens a joined sales row (sale + inventory_item + product + marketplace)
 // into the flat shape every report endpoint below works with.
 function flattenSale(row) {
@@ -86,13 +104,15 @@ const dashboardSummary = async (req, res, next) => {
       inventoryByStatus[i.status] = (inventoryByStatus[i.status] || 0) + 1;
     });
 
-    // Only "Available"/"SOLD" exist today; other statuses (e.g. Reserved) fall
-    // out naturally once they appear, since we group by whatever value is present.
-    const availableCount = inventoryByStatus['Available'] || 0;
-    const reservedCount = inventoryByStatus['Reserved'] || 0;
-    const soldCount = inventoryByStatus['SOLD'] || 0;
+    // Status casing in the DB isn't guaranteed stable (e.g. "Available" became
+    // "AVAILABLE" between sessions), so compare case-insensitively rather than
+    // against a literal string.
+    const normalizedStatus = (s) => (s || '').toUpperCase();
+    const availableCount = items.filter((i) => normalizedStatus(i.status) === 'AVAILABLE').length;
+    const reservedCount = items.filter((i) => normalizedStatus(i.status) === 'RESERVED').length;
+    const soldCount = items.filter((i) => normalizedStatus(i.status) === 'SOLD').length;
 
-    const activeItems = items.filter((i) => i.status !== 'SOLD');
+    const activeItems = items.filter((i) => normalizedStatus(i.status) !== 'SOLD');
     const totalInventoryCost = activeItems.reduce(
       (sum, i) => (isCostKnown(i.acquisition_price) ? sum + Number(i.acquisition_price) : sum),
       0
@@ -207,7 +227,16 @@ const marketSales = async (req, res, next) => {
       );
     }
 
-    rows.sort((a, b) => new Date(b.sold_date) - new Date(a.sold_date));
+    rows = sortRows(rows, {
+      sortBy: req.query.sortBy,
+      sortOrder: req.query.sortOrder,
+      allowedFields: [
+        'sold_date', 'selling_price', 'acquisition_cost', 'fees', 'shipping',
+        'gross_profit', 'net_profit', 'roi', 'days_held', 'brand', 'sku',
+        'model_no', 'product_name', 'marketplace_name',
+      ],
+      defaultSortBy: 'sold_date',
+    });
 
     const total = rows.length;
     const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -275,7 +304,7 @@ const inventoryAging = async (req, res, next) => {
         `id, status, acquisition_price, current_selling_price, purchase_date,
          products!inner ( sku, brand, model_no, product_name )`
       )
-      .eq('status', 'Available');
+      .ilike('status', 'available');
 
     if (error) throw { status: 400, message: error.message };
 
@@ -283,7 +312,9 @@ const inventoryAging = async (req, res, next) => {
     const buckets = { new: 0, normal: 0, watch: 0, slow: 0, critical: 0 };
     let capitalLocked = 0;
 
-    const items = data.map((item) => {
+    // buckets/capital_locked always reflect the full available-inventory set,
+    // regardless of how the `items` list below is paginated for display.
+    let items = data.map((item) => {
       const product = item.products || {};
       const daysHeld = daysBetween(item.purchase_date, today);
       const bucket = agingBucket(daysHeld);
@@ -308,7 +339,35 @@ const inventoryAging = async (req, res, next) => {
       };
     });
 
-    res.json({ success: true, data: { items, buckets, capital_locked: capitalLocked } });
+    items = sortRows(items, {
+      sortBy: req.query.sortBy,
+      sortOrder: req.query.sortOrder,
+      allowedFields: ['days_held', 'acquisition_cost', 'current_price', 'potential_margin', 'brand', 'sku', 'model_no', 'product_name', 'purchase_date'],
+      defaultSortBy: 'days_held',
+    });
+
+    const listParams = req.query.page !== undefined || req.query.limit !== undefined;
+    if (!listParams) {
+      return res.json({ success: true, data: { items, buckets, capital_locked: capitalLocked } });
+    }
+
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const total = items.length;
+    const pageItems = items.slice((page - 1) * limit, page * limit);
+
+    res.json({
+      success: true,
+      data: {
+        items: pageItems,
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+        buckets,
+        capital_locked: capitalLocked,
+      },
+    });
   } catch (err) {
     next(err);
   }
