@@ -5,7 +5,9 @@ module.exports = [
   { table: 'suppliers', path: 'suppliers', writable: true },
   { table: 'marketplaces', path: 'marketplaces', writable: true },
   { table: 'products', path: 'products', writable: true },
-  { table: 'inventory_items', path: 'inventory-items', writable: true },
+  // softDelete: DELETE sets is_active = false instead of removing the row;
+  // GET list hides inactive rows unless ?includeInactive=true is passed.
+  { table: 'inventory_items', path: 'inventory-items', writable: true, softDelete: true },
   { table: 'stock_movements', path: 'stock-movements', writable: true },
   { table: 'sales', path: 'sales', writable: true },
   { table: 'marketplace_sales_import', path: 'marketplace-sales-import', writable: true },

@@ -36,8 +36,8 @@ app.use('/api/reports', reportsRoutes);
 app.use('/api/inventory-items', inventoryItemExtraRoutes);
 app.use('/api/brands', brandsRoutes);
 
-resources.forEach(({ table, path, writable }) => {
-  app.use(`/api/${path}`, buildResourceRouter(table, { writable }));
+resources.forEach(({ table, path, writable, softDelete }) => {
+  app.use(`/api/${path}`, buildResourceRouter(table, { writable, softDelete }));
 });
 
 // 404 + error handling (must be registered last)

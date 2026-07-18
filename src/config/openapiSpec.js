@@ -46,18 +46,24 @@ const paginationParams = [
 
 // One CRUD resource entry becomes 1-5 OpenAPI operations, mirroring exactly
 // what buildResourceRouter (src/routes/resourceRoutes.js) wires up for it.
-function buildResourcePaths({ table, path, writable }) {
+function buildResourcePaths({ table, path, writable, softDelete }) {
   const tag = path;
   const listPath = `/${path}`;
   const itemPath = `/${path}/{id}`;
   const paths = {};
 
+  const listDescription = softDelete
+    ? 'No query params -> plain array. Pass page/limit/sortBy to get { items, page, limit, total, totalPages } instead. Rows with is_active=false are hidden unless includeInactive=true is passed.'
+    : 'No query params -> plain array. Pass page/limit/sortBy to get { items, page, limit, total, totalPages } instead.';
+
   paths[listPath] = {
     get: {
       tags: [tag],
       summary: `List all ${table}`,
-      description: 'No query params -> plain array. Pass page/limit/sortBy to get { items, page, limit, total, totalPages } instead.',
-      parameters: paginationParams,
+      description: listDescription,
+      parameters: softDelete
+        ? [...paginationParams, { name: 'includeInactive', in: 'query', schema: { type: 'boolean', default: false }, description: 'Include soft-deleted (is_active=false) rows' }]
+        : paginationParams,
       responses: {
         200: {
           description: 'OK',
@@ -114,7 +120,8 @@ function buildResourcePaths({ table, path, writable }) {
     },
     delete: {
       tags: [tag],
-      summary: `Delete a ${table} record by id`,
+      summary: softDelete ? `Soft-delete a ${table} record by id (sets is_active=false)` : `Delete a ${table} record by id`,
+      description: softDelete ? 'Does not remove the row — sets is_active=false. List endpoint hides it afterward unless includeInactive=true.' : undefined,
       parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
       responses: {
         200: {
@@ -130,13 +137,22 @@ function buildResourcePaths({ table, path, writable }) {
     },
   };
   // delete responds with a message, not data — patch that in directly.
-  paths[itemPath].delete.responses[200].content['application/json'].schema = {
-    type: 'object',
-    properties: {
-      success: { type: 'boolean', example: true },
-      message: { type: 'string', example: 'Record 1 deleted from table' },
-    },
-  };
+  paths[itemPath].delete.responses[200].content['application/json'].schema = softDelete
+    ? {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'Record 1 deactivated in table' },
+          data: genericRecord,
+        },
+      }
+    : {
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'Record 1 deleted from table' },
+        },
+      };
 
   return paths;
 }

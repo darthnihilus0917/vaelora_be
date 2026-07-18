@@ -18,19 +18,26 @@ function parseListParams(query) {
 
 // Builds getAll/getById/create/update/remove handlers for a Supabase table.
 // Read-only resources (writable: false) only get getAll.
-function buildCrudHandlers(table, { writable = true } = {}) {
+// softDelete: DELETE becomes an is_active=false update instead of a real
+// delete, and GET list hides inactive rows unless ?includeInactive=true.
+function buildCrudHandlers(table, { writable = true, softDelete = false } = {}) {
   const getAll = async (req, res, next) => {
     try {
       const listParams = parseListParams(req.query);
+      const hideInactive = softDelete && req.query.includeInactive !== 'true';
 
       if (!listParams) {
-        const { data, error } = await supabase.from(table).select('*');
+        let query = supabase.from(table).select('*');
+        if (hideInactive) query = query.eq('is_active', true);
+
+        const { data, error } = await query;
         if (error) throw { status: 400, message: error.message };
         return res.json({ success: true, data });
       }
 
       const { page, limit, sortBy, sortOrder } = listParams;
       let query = supabase.from(table).select('*', { count: 'exact' });
+      if (hideInactive) query = query.eq('is_active', true);
       if (sortBy) query = query.order(sortBy, { ascending: sortOrder === 'asc' });
       query = query.range((page - 1) * limit, page * limit - 1);
 
@@ -98,6 +105,21 @@ function buildCrudHandlers(table, { writable = true } = {}) {
   const remove = async (req, res, next) => {
     try {
       const { id } = req.params;
+
+      if (softDelete) {
+        const { data, error } = await supabase
+          .from(table)
+          .update({ is_active: false })
+          .eq('id', id)
+          .select()
+          .single();
+
+        if (error) throw { status: 400, message: error.message };
+        if (!data) throw { status: 404, message: `Record not found in ${table}` };
+
+        return res.json({ success: true, message: `Record ${id} deactivated in ${table}`, data });
+      }
+
       const { error } = await supabase.from(table).delete().eq('id', id);
 
       if (error) throw { status: 400, message: error.message };
