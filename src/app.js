@@ -2,7 +2,6 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
-const swaggerUi = require('swagger-ui-express');
 
 const resources = require('./config/resources');
 const buildResourceRouter = require('./routes/resourceRoutes');
@@ -12,6 +11,7 @@ const brandsRoutes = require('./routes/brandsRoutes');
 const authRoutes = require('./routes/authRoutes');
 const usersRoutes = require('./routes/usersRoutes');
 const openapiSpec = require('./config/openapiSpec');
+const apiDocsPage = require('./config/apiDocsPage');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 
 const app = express();
@@ -33,7 +33,7 @@ app.get('/health', (req, res) => {
 });
 
 // API docs
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openapiSpec));
+app.get('/api-docs', (req, res) => res.type('html').send(apiDocsPage));
 app.get('/api-docs.json', (req, res) => res.json(openapiSpec));
 
 // Routes
