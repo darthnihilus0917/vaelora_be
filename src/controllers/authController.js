@@ -42,7 +42,7 @@ const register = async (req, res, next) => {
     });
     if (createError) throw { status: 400, message: createError.message };
 
-    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const { data: signInData, error: signInError } = await supabase.createSessionClient().auth.signInWithPassword({ email, password });
     if (signInError) throw { status: 400, message: signInError.message };
 
     const { data: profile, error: profileError } = await supabase
@@ -118,7 +118,7 @@ const login = async (req, res, next) => {
     const { email, password } = req.body;
     if (!email || !password) throw { status: 400, message: 'email and password are required' };
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.createSessionClient().auth.signInWithPassword({ email, password });
     if (error) {
       await logAuthEvent({ eventType: 'LOGIN_FAILED', details: { email, reason: error.message }, req });
       throw { status: 401, message: 'Invalid email or password' };
@@ -167,7 +167,7 @@ const refresh = async (req, res, next) => {
     const { refresh_token } = req.body;
     if (!refresh_token) throw { status: 400, message: 'refresh_token is required' };
 
-    const { data, error } = await supabase.auth.refreshSession({ refresh_token });
+    const { data, error } = await supabase.createSessionClient().auth.refreshSession({ refresh_token });
     if (error) throw { status: 401, message: 'Invalid or expired refresh token' };
 
     res.json({ success: true, data: { session: data.session } });

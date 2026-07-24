@@ -17,4 +17,20 @@ const supabase = createClient(supabaseUrl, supabaseKey, {
   },
 });
 
+// signInWithPassword/signUp/refreshSession mutate the calling client's
+// internal session, which then gets used as the auth header for that
+// client's subsequent .from()/.rpc() calls -- overriding the service_role
+// key. Since `supabase` above is a long-lived singleton shared by every
+// request in a warm serverless instance, ever calling those methods on it
+// would silently downgrade EVERY later query on that instance (for every
+// user, on every table) from service_role to whichever session logged in
+// last, which is catastrophic under RLS. Auth flows that establish a
+// session must use a throwaway client instead; see authController.js.
+function createSessionClient() {
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
 module.exports = supabase;
+module.exports.createSessionClient = createSessionClient;
