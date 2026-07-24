@@ -1,7 +1,6 @@
 const supabase = require('../config/supabaseClient');
 const { logAuthEvent } = require('../utils/auditLog');
-
-const VALID_ROLES = ['viewer', 'staff', 'admin', 'superadmin'];
+const { getValidRoleNames } = require('../utils/roles');
 
 const getAll = async (req, res, next) => {
   try {
@@ -28,8 +27,9 @@ const updateRole = async (req, res, next) => {
     if (id === req.user.id) {
       throw { status: 400, message: 'Cannot change your own role via this endpoint' };
     }
-    if (!VALID_ROLES.includes(role)) {
-      throw { status: 400, message: `role must be one of ${VALID_ROLES.join(', ')}` };
+    const validRoles = await getValidRoleNames();
+    if (!validRoles.includes(role)) {
+      throw { status: 400, message: `role must be one of ${validRoles.join(', ')}` };
     }
 
     const { data: before, error: beforeError } = await supabase

@@ -1,7 +1,6 @@
 const supabase = require('../config/supabaseClient');
 const { logAuthEvent } = require('../utils/auditLog');
-
-const VALID_ROLES = ['viewer', 'staff', 'admin', 'superadmin'];
+const { getValidRoleNames } = require('../utils/roles');
 
 // A DB trigger auto-creates a user_profiles row per auth.users signup and
 // auto-promotes the very first one to superadmin. Self-registration is only
@@ -80,8 +79,9 @@ const invite = async (req, res, next) => {
     const { email, full_name, role } = req.body;
 
     if (!email) throw { status: 400, message: 'email is required' };
-    if (!role || !VALID_ROLES.includes(role)) {
-      throw { status: 400, message: `role is required and must be one of ${VALID_ROLES.join(', ')}` };
+    const validRoles = await getValidRoleNames();
+    if (!role || !validRoles.includes(role)) {
+      throw { status: 400, message: `role is required and must be one of ${validRoles.join(', ')}` };
     }
     if (!canAssignRole(req.user.role, role)) {
       throw { status: 403, message: `Your role (${req.user.role}) cannot invite a user as ${role}` };

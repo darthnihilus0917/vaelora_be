@@ -10,6 +10,7 @@ const inventoryItemExtraRoutes = require('./routes/inventoryItemExtraRoutes');
 const brandsRoutes = require('./routes/brandsRoutes');
 const authRoutes = require('./routes/authRoutes');
 const usersRoutes = require('./routes/usersRoutes');
+const rolesRoutes = require('./routes/rolesRoutes');
 const openapiSpec = require('./config/openapiSpec');
 const apiDocsPage = require('./config/apiDocsPage');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
@@ -39,6 +40,7 @@ app.get('/api-docs.json', (req, res) => res.json(openapiSpec));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/roles', rolesRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/inventory-items', inventoryItemExtraRoutes);
 app.use('/api/brands', brandsRoutes);

@@ -410,7 +410,7 @@ const profileSchema = {
     id: { type: 'string', format: 'uuid' },
     email: { type: 'string', format: 'email' },
     full_name: { type: 'string', nullable: true },
-    role: { type: 'string', enum: ['superadmin', 'admin', 'staff', 'viewer'] },
+    role: { type: 'string', description: 'One of the role names returned by GET /roles', example: 'staff' },
     is_active: { type: 'boolean' },
   },
 };
@@ -456,7 +456,7 @@ const authPaths = {
               properties: {
                 email: { type: 'string', format: 'email' },
                 full_name: { type: 'string' },
-                role: { type: 'string', enum: ['superadmin', 'admin', 'staff', 'viewer'] },
+                role: { type: 'string', description: 'One of the role names returned by GET /roles', example: 'staff' },
               },
             },
           },
@@ -531,7 +531,7 @@ const userRecord = {
   properties: {
     id: { type: 'string', format: 'uuid' },
     full_name: { type: 'string', nullable: true },
-    role: { type: 'string', enum: ['superadmin', 'admin', 'staff', 'viewer'] },
+    role: { type: 'string', description: 'One of the role names returned by GET /roles', example: 'staff' },
     is_active: { type: 'boolean' },
     created_at: { type: 'string', format: 'date-time' },
     updated_at: { type: 'string', format: 'date-time' },
@@ -559,7 +559,7 @@ const usersPaths = {
       parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
       requestBody: {
         required: true,
-        content: { 'application/json': { schema: { type: 'object', required: ['role'], properties: { role: { type: 'string', enum: ['superadmin', 'admin', 'staff', 'viewer'] } } } } },
+        content: { 'application/json': { schema: { type: 'object', required: ['role'], properties: { role: { type: 'string', description: 'One of the role names returned by GET /roles' } } } } },
       },
       responses: {
         200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(userRecord) } } },
@@ -595,6 +595,104 @@ const usersPaths = {
         200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(userRecord) } } },
         403: { description: 'Requires superadmin', content: { 'application/json': { schema: ErrorEnvelope } } },
         404: errorResponses[404],
+      },
+    },
+  },
+};
+
+const roleRecord = {
+  type: 'object',
+  properties: {
+    id: { type: 'integer' },
+    name: { type: 'string', example: 'staff' },
+    description: { type: 'string', nullable: true },
+    is_system: { type: 'boolean', description: 'True for the 4 built-in roles (superadmin/admin/staff/viewer); these cannot be renamed or deleted.' },
+    created_at: { type: 'string', format: 'date-time' },
+    updated_at: { type: 'string', format: 'date-time' },
+  },
+};
+
+const rolesPaths = {
+  '/roles': {
+    get: {
+      tags: ['roles'],
+      summary: 'List all roles',
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope({ type: 'array', items: roleRecord }) } } },
+        401: { description: 'Not authenticated', content: { 'application/json': { schema: ErrorEnvelope } } },
+      },
+    },
+    post: {
+      tags: ['roles'],
+      summary: 'Create a custom role (superadmin only)',
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['name'],
+              properties: {
+                name: { type: 'string', description: 'Lowercase letters, numbers, underscores; must start with a letter', example: 'manager' },
+                description: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        201: { description: 'Created', content: { 'application/json': { schema: SuccessEnvelope(roleRecord) } } },
+        400: errorResponses[400],
+        403: { description: 'Requires superadmin', content: { 'application/json': { schema: ErrorEnvelope } } },
+        409: { description: 'Role name already exists', content: { 'application/json': { schema: ErrorEnvelope } } },
+      },
+    },
+  },
+  '/roles/{name}': {
+    get: {
+      tags: ['roles'],
+      summary: 'Get a single role by name',
+      security: [{ bearerAuth: [] }],
+      parameters: [{ name: 'name', in: 'path', required: true, schema: { type: 'string' } }],
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(roleRecord) } } },
+        404: errorResponses[404],
+      },
+    },
+    patch: {
+      tags: ['roles'],
+      summary: 'Update a role (superadmin only)',
+      description: 'System roles (is_system=true) cannot be renamed, only their description edited.',
+      security: [{ bearerAuth: [] }],
+      parameters: [{ name: 'name', in: 'path', required: true, schema: { type: 'string' } }],
+      requestBody: {
+        required: false,
+        content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string' }, description: { type: 'string' } } } } },
+      },
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(roleRecord) } } },
+        400: errorResponses[400],
+        403: { description: 'Requires superadmin, or attempted to rename a system role', content: { 'application/json': { schema: ErrorEnvelope } } },
+        404: errorResponses[404],
+        409: { description: 'Role name already exists', content: { 'application/json': { schema: ErrorEnvelope } } },
+      },
+    },
+    delete: {
+      tags: ['roles'],
+      summary: 'Delete a custom role (superadmin only)',
+      description: 'System roles cannot be deleted. Roles still assigned to a user_profiles row cannot be deleted (409).',
+      security: [{ bearerAuth: [] }],
+      parameters: [{ name: 'name', in: 'path', required: true, schema: { type: 'string' } }],
+      responses: {
+        200: {
+          description: 'OK',
+          content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean', example: true }, message: { type: 'string' } } } } },
+        },
+        403: { description: 'Requires superadmin, or attempted to delete a system role', content: { 'application/json': { schema: ErrorEnvelope } } },
+        404: errorResponses[404],
+        409: { description: 'Role still assigned to a user', content: { 'application/json': { schema: ErrorEnvelope } } },
       },
     },
   },
@@ -642,6 +740,7 @@ const openapiSpec = {
     { name: 'health' },
     { name: 'auth' },
     { name: 'users' },
+    { name: 'roles' },
     { name: 'brands' },
     ...resources.map((r) => ({ name: r.path })),
     { name: 'reports' },
@@ -650,6 +749,7 @@ const openapiSpec = {
     ...healthPath,
     ...authPaths,
     ...usersPaths,
+    ...rolesPaths,
     ...brandsPaths,
     ...resourcePaths,
     ...reportsPaths,

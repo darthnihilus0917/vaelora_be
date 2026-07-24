@@ -17,7 +17,7 @@ const authenticate = async (req, res, next) => {
 
     let payload;
     try {
-      payload = verifySupabaseToken(token);
+      payload = await verifySupabaseToken(token);
     } catch (err) {
       throw { status: 401, message: 'Invalid or expired token' };
     }
