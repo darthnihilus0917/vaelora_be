@@ -9,17 +9,22 @@ const buildResourceRouter = require('./routes/resourceRoutes');
 const reportsRoutes = require('./routes/reportsRoutes');
 const inventoryItemExtraRoutes = require('./routes/inventoryItemExtraRoutes');
 const brandsRoutes = require('./routes/brandsRoutes');
+const authRoutes = require('./routes/authRoutes');
+const usersRoutes = require('./routes/usersRoutes');
 const openapiSpec = require('./config/openapiSpec');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 
 const app = express();
 
 // Core middleware
-app.use(cors({ origin: [
-  'https://vaelorafe.netlify.app',
-  'http://localhost:4000',
-  'http://localhost:5173',
-]}));
+app.use(cors({
+  origin: [
+    'https://vaelorafe.netlify.app',
+    'http://localhost:4000',
+    'http://localhost:5173',
+  ],
+  credentials: true,
+}));
 app.use(express.json());
 
 // Health check
@@ -32,6 +37,8 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(openapiSpec));
 app.get('/api-docs.json', (req, res) => res.json(openapiSpec));
 
 // Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', usersRoutes);
 app.use('/api/reports', reportsRoutes);
 app.use('/api/inventory-items', inventoryItemExtraRoutes);
 app.use('/api/brands', brandsRoutes);

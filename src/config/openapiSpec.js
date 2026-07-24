@@ -394,6 +394,212 @@ const brandsPaths = {
   },
 };
 
+const sessionSchema = {
+  type: 'object',
+  properties: {
+    access_token: { type: 'string' },
+    refresh_token: { type: 'string' },
+    expires_at: { type: 'integer' },
+    token_type: { type: 'string', example: 'bearer' },
+  },
+};
+
+const profileSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    email: { type: 'string', format: 'email' },
+    full_name: { type: 'string', nullable: true },
+    role: { type: 'string', enum: ['superadmin', 'admin', 'staff', 'viewer'] },
+    is_active: { type: 'boolean' },
+  },
+};
+
+const authPaths = {
+  '/auth/register': {
+    post: {
+      tags: ['auth'],
+      summary: 'Register the very first user (self-registration closes after that)',
+      description: '403 once any user_profiles row already exists. The first-ever account is auto-promoted to superadmin by a DB trigger.',
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['email', 'password'],
+              properties: { email: { type: 'string', format: 'email' }, password: { type: 'string' }, full_name: { type: 'string' } },
+            },
+          },
+        },
+      },
+      responses: {
+        201: { description: 'Created', content: { 'application/json': { schema: SuccessEnvelope({ type: 'object', properties: { session: sessionSchema, profile: profileSchema } }) } } },
+        400: errorResponses[400],
+        403: { description: 'Registration is closed', content: { 'application/json': { schema: ErrorEnvelope } } },
+      },
+    },
+  },
+  '/auth/invite': {
+    post: {
+      tags: ['auth'],
+      summary: 'Invite a new user by email (admin/superadmin only)',
+      description: 'Sends a Supabase invite email. Admins may only assign staff/viewer; only superadmin may assign admin/superadmin.',
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['email', 'role'],
+              properties: {
+                email: { type: 'string', format: 'email' },
+                full_name: { type: 'string' },
+                role: { type: 'string', enum: ['superadmin', 'admin', 'staff', 'viewer'] },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        201: { description: 'Created', content: { 'application/json': { schema: SuccessEnvelope(genericRecord) } } },
+        400: errorResponses[400],
+        403: { description: 'Cannot assign that role', content: { 'application/json': { schema: ErrorEnvelope } } },
+      },
+    },
+  },
+  '/auth/login': {
+    post: {
+      tags: ['auth'],
+      summary: 'Email/password sign-in',
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: { type: 'object', required: ['email', 'password'], properties: { email: { type: 'string', format: 'email' }, password: { type: 'string' } } },
+          },
+        },
+      },
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope({ type: 'object', properties: { session: sessionSchema, profile: profileSchema } }) } } },
+        401: { description: 'Invalid credentials', content: { 'application/json': { schema: ErrorEnvelope } } },
+        403: { description: 'Account deactivated', content: { 'application/json': { schema: ErrorEnvelope } } },
+      },
+    },
+  },
+  '/auth/logout': {
+    post: {
+      tags: ['auth'],
+      summary: 'Invalidate the current session',
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean', example: true }, message: { type: 'string' } } } } } },
+        401: { description: 'Not authenticated', content: { 'application/json': { schema: ErrorEnvelope } } },
+      },
+    },
+  },
+  '/auth/refresh': {
+    post: {
+      tags: ['auth'],
+      summary: 'Rotate an access token using a refresh token',
+      requestBody: {
+        required: true,
+        content: { 'application/json': { schema: { type: 'object', required: ['refresh_token'], properties: { refresh_token: { type: 'string' } } } } },
+      },
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope({ type: 'object', properties: { session: sessionSchema } }) } } },
+        401: { description: 'Invalid or expired refresh token', content: { 'application/json': { schema: ErrorEnvelope } } },
+      },
+    },
+  },
+  '/auth/me': {
+    get: {
+      tags: ['auth'],
+      summary: "Current user's profile",
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(profileSchema) } } },
+        401: { description: 'Not authenticated', content: { 'application/json': { schema: ErrorEnvelope } } },
+      },
+    },
+  },
+};
+
+const userRecord = {
+  type: 'object',
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    full_name: { type: 'string', nullable: true },
+    role: { type: 'string', enum: ['superadmin', 'admin', 'staff', 'viewer'] },
+    is_active: { type: 'boolean' },
+    created_at: { type: 'string', format: 'date-time' },
+    updated_at: { type: 'string', format: 'date-time' },
+  },
+};
+
+const usersPaths = {
+  '/users': {
+    get: {
+      tags: ['users'],
+      summary: 'List all user profiles (superadmin only)',
+      security: [{ bearerAuth: [] }],
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope({ type: 'array', items: userRecord }) } } },
+        403: { description: 'Requires superadmin', content: { 'application/json': { schema: ErrorEnvelope } } },
+      },
+    },
+  },
+  '/users/{id}/role': {
+    patch: {
+      tags: ['users'],
+      summary: "Change a user's role (superadmin only)",
+      description: 'Logs a ROLE_CHANGE entry to auth_audit_log. Cannot target your own account.',
+      security: [{ bearerAuth: [] }],
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      requestBody: {
+        required: true,
+        content: { 'application/json': { schema: { type: 'object', required: ['role'], properties: { role: { type: 'string', enum: ['superadmin', 'admin', 'staff', 'viewer'] } } } } },
+      },
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(userRecord) } } },
+        400: errorResponses[400],
+        403: { description: 'Requires superadmin', content: { 'application/json': { schema: ErrorEnvelope } } },
+        404: errorResponses[404],
+      },
+    },
+  },
+  '/users/{id}/deactivate': {
+    patch: {
+      tags: ['users'],
+      summary: 'Deactivate a user (superadmin only)',
+      description: 'Logs an ACCOUNT_DEACTIVATED entry to auth_audit_log. Cannot target your own account.',
+      security: [{ bearerAuth: [] }],
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(userRecord) } } },
+        400: errorResponses[400],
+        403: { description: 'Requires superadmin', content: { 'application/json': { schema: ErrorEnvelope } } },
+        404: errorResponses[404],
+      },
+    },
+  },
+  '/users/{id}/activate': {
+    patch: {
+      tags: ['users'],
+      summary: 'Reactivate a user (superadmin only)',
+      description: 'Logs an ACCOUNT_ACTIVATED entry to auth_audit_log.',
+      security: [{ bearerAuth: [] }],
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(userRecord) } } },
+        403: { description: 'Requires superadmin', content: { 'application/json': { schema: ErrorEnvelope } } },
+        404: errorResponses[404],
+      },
+    },
+  },
+};
+
 // /health is mounted outside the /api prefix, so it needs its own server override.
 const healthPath = {
   '/health': {
@@ -427,14 +633,23 @@ const openapiSpec = {
       'Express + Supabase backend. Most resources are generic CRUD endpoints generated from src/config/resources.js; /reports/* and the /inventory-items/{id}/* sub-resources are hand-written.',
   },
   servers: [{ url: '/api' }],
+  components: {
+    securitySchemes: {
+      bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', description: 'Supabase access_token from /auth/login, /auth/register, or /auth/refresh' },
+    },
+  },
   tags: [
     { name: 'health' },
+    { name: 'auth' },
+    { name: 'users' },
     { name: 'brands' },
     ...resources.map((r) => ({ name: r.path })),
     { name: 'reports' },
   ],
   paths: {
     ...healthPath,
+    ...authPaths,
+    ...usersPaths,
     ...brandsPaths,
     ...resourcePaths,
     ...reportsPaths,
