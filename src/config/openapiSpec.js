@@ -236,6 +236,28 @@ const inventoryItemExtraPaths = {
       },
     },
   },
+  '/inventory-items/{id}/status': {
+    patch: {
+      tags: ['inventory-items'],
+      summary: 'Change an inventory item\'s status',
+      description: 'Locked (409) once the item has a recorded sale -- reconcile via the sale record instead of changing status directly in that case.',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: { type: 'object', required: ['status'], properties: { status: { type: 'string', enum: ['AVAILABLE', 'RESERVED', 'SOLD'] } } },
+          },
+        },
+      },
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(genericRecord) } } },
+        400: errorResponses[400],
+        404: errorResponses[404],
+        409: { description: 'Item has a recorded sale; status is locked', content: { 'application/json': { schema: ErrorEnvelope } } },
+      },
+    },
+  },
 };
 
 const brandRecord = {
