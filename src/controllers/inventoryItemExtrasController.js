@@ -46,36 +46,16 @@ const updateStatus = async (req, res, next) => {
     if (!status || !VALID_STATUSES.includes(String(status).toUpperCase())) {
       throw { status: 400, message: `status is required and must be one of ${VALID_STATUSES.join(', ')}` };
     }
-    const normalizedStatus = String(status).toUpperCase();
-
-    const { data: item, error: itemError } = await supabase
-      .from('inventory_items')
-      .select('id, status')
-      .eq('id', id)
-      .single();
-    if (itemError || !item) throw { status: 404, message: 'Inventory item not found' };
-
-    // A recorded sale is the source of truth for "this item is sold" --
-    // letting a plain status PATCH move away from (or redundantly re-set)
-    // that would desync it from the sales table and the reports that join
-    // against it. Reconcile via the sale record instead.
-    const { data: sale, error: saleError } = await supabase
-      .from('sales')
-      .select('id')
-      .eq('inventory_item_id', id)
-      .maybeSingle();
-    if (saleError) throw { status: 400, message: saleError.message };
-    if (sale) {
-      throw { status: 409, message: 'This item has a recorded sale; status is locked. Update the sale record instead of changing status directly.' };
-    }
 
     const { data, error } = await supabase
       .from('inventory_items')
-      .update({ status: normalizedStatus })
+      .update({ status: String(status).toUpperCase() })
       .eq('id', id)
       .select()
       .single();
+
     if (error) throw { status: 400, message: error.message };
+    if (!data) throw { status: 404, message: 'Inventory item not found' };
 
     res.json({ success: true, data });
   } catch (err) {
