@@ -414,6 +414,176 @@ const brandsPaths = {
   },
 };
 
+const productImageRecord = {
+  type: 'object',
+  properties: {
+    id: { type: 'integer' },
+    product_id: { type: 'integer' },
+    url: { type: 'string', format: 'uri' },
+    is_default: { type: 'boolean' },
+    sort_order: { type: 'integer' },
+    created_at: { type: 'string', format: 'date-time' },
+  },
+};
+
+const productRecord = {
+  type: 'object',
+  properties: {
+    id: { type: 'integer' },
+    sku: { type: 'string' },
+    product_name: { type: 'string' },
+    brand_id: { type: 'integer', nullable: true },
+    category_id: { type: 'integer', nullable: true },
+    model_no: { type: 'string', nullable: true },
+    condition_label: { type: 'string', nullable: true },
+    is_discontinued: { type: 'boolean' },
+    product_images: { type: 'array', items: productImageRecord },
+  },
+};
+
+const productsPaths = {
+  '/products': {
+    get: {
+      tags: ['products'],
+      summary: 'List products (each includes its product_images)',
+      description: 'No page/limit/sortBy -> plain array. Pass any of them to get { items, page, limit, total, totalPages } instead.',
+      parameters: paginationParams,
+      responses: {
+        200: {
+          description: 'OK',
+          content: {
+            'application/json': {
+              schema: SuccessEnvelope({ oneOf: [{ type: 'array', items: productRecord }, paginatedEnvelope(productRecord)] }),
+            },
+          },
+        },
+      },
+    },
+    post: {
+      tags: ['products'],
+      summary: 'Create a product (admin/superadmin only)',
+      requestBody: { required: true, content: { 'application/json': { schema: genericRecord } } },
+      responses: {
+        201: { description: 'Created', content: { 'application/json': { schema: SuccessEnvelope(productRecord) } } },
+        400: errorResponses[400],
+        403: { description: 'Requires admin or superadmin', content: { 'application/json': { schema: ErrorEnvelope } } },
+      },
+    },
+  },
+  '/products/{id}': {
+    get: {
+      tags: ['products'],
+      summary: 'Get a single product by id (includes its product_images)',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(productRecord) } } },
+        404: errorResponses[404],
+      },
+    },
+    put: {
+      tags: ['products'],
+      summary: 'Update a product (admin/superadmin only)',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+      requestBody: { required: true, content: { 'application/json': { schema: genericRecord } } },
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(productRecord) } } },
+        400: errorResponses[400],
+        403: { description: 'Requires admin or superadmin', content: { 'application/json': { schema: ErrorEnvelope } } },
+        404: errorResponses[404],
+      },
+    },
+    delete: {
+      tags: ['products'],
+      summary: 'Delete a product (admin/superadmin only)',
+      description: 'Also deletes all of its images from R2 (product_images rows cascade-delete in Postgres).',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+      responses: {
+        200: {
+          description: 'OK',
+          content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean', example: true }, message: { type: 'string' } } } } },
+        },
+        400: errorResponses[400],
+        403: { description: 'Requires admin or superadmin', content: { 'application/json': { schema: ErrorEnvelope } } },
+      },
+    },
+  },
+  '/products/{id}/images': {
+    get: {
+      tags: ['products'],
+      summary: 'List a product\'s images, ordered by sort_order',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope({ type: 'array', items: productImageRecord }) } } },
+      },
+    },
+    post: {
+      tags: ['products'],
+      summary: 'Upload one or more images for a product (admin/superadmin only)',
+      description:
+        'Images are uploaded to Cloudflare R2. Field name must be "images" (up to 10 files, 5MB each, jpeg/png/webp/gif only). '
+        + 'Optional "defaultIndex" form field (0-based, within this batch) marks one of the uploaded files as the default image. '
+        + 'If the product has no images yet and defaultIndex is omitted, the first uploaded file becomes the default automatically.',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+      requestBody: {
+        required: true,
+        content: {
+          'multipart/form-data': {
+            schema: {
+              type: 'object',
+              required: ['images'],
+              properties: {
+                images: { type: 'array', items: { type: 'string', format: 'binary' } },
+                defaultIndex: { type: 'integer', description: '0-based index within the uploaded "images" array' },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        201: { description: 'Created', content: { 'application/json': { schema: SuccessEnvelope({ type: 'array', items: productImageRecord }) } } },
+        400: errorResponses[400],
+        403: { description: 'Requires admin or superadmin', content: { 'application/json': { schema: ErrorEnvelope } } },
+        404: { description: 'Product not found', content: { 'application/json': { schema: ErrorEnvelope } } },
+      },
+    },
+  },
+  '/products/{id}/images/{imageId}/default': {
+    patch: {
+      tags: ['products'],
+      summary: 'Set an existing image as the product\'s default image (admin/superadmin only)',
+      description: 'Clears is_default on any other image for the same product first, so at most one default ever exists per product.',
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
+        { name: 'imageId', in: 'path', required: true, schema: { type: 'integer' } },
+      ],
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(productImageRecord) } } },
+        403: { description: 'Requires admin or superadmin', content: { 'application/json': { schema: ErrorEnvelope } } },
+        404: { description: 'Image not found for this product', content: { 'application/json': { schema: ErrorEnvelope } } },
+      },
+    },
+  },
+  '/products/{id}/images/{imageId}': {
+    delete: {
+      tags: ['products'],
+      summary: 'Delete a product image (admin/superadmin only)',
+      description: 'Removes the object from R2 and the DB row. If the deleted image was the default, the next image (by sort_order) is promoted to default.',
+      parameters: [
+        { name: 'id', in: 'path', required: true, schema: { type: 'integer' } },
+        { name: 'imageId', in: 'path', required: true, schema: { type: 'integer' } },
+      ],
+      responses: {
+        200: {
+          description: 'OK',
+          content: { 'application/json': { schema: { type: 'object', properties: { success: { type: 'boolean', example: true }, message: { type: 'string' } } } } },
+        },
+        403: { description: 'Requires admin or superadmin', content: { 'application/json': { schema: ErrorEnvelope } } },
+        404: { description: 'Image not found for this product', content: { 'application/json': { schema: ErrorEnvelope } } },
+      },
+    },
+  },
+};
+
 const sessionSchema = {
   type: 'object',
   properties: {
@@ -441,6 +611,7 @@ const authPaths = {
       tags: ['auth'],
       summary: 'Register the very first user (self-registration closes after that)',
       description: '403 once any user_profiles row already exists. The first-ever account is auto-promoted to superadmin by a DB trigger.',
+      security: [],
       requestBody: {
         required: true,
         content: {
@@ -493,6 +664,7 @@ const authPaths = {
     post: {
       tags: ['auth'],
       summary: 'Email/password sign-in',
+      security: [],
       requestBody: {
         required: true,
         content: {
@@ -523,6 +695,7 @@ const authPaths = {
     post: {
       tags: ['auth'],
       summary: 'Rotate an access token using a refresh token',
+      security: [],
       requestBody: {
         required: true,
         content: { 'application/json': { schema: { type: 'object', required: ['refresh_token'], properties: { refresh_token: { type: 'string' } } } } },
@@ -725,6 +898,7 @@ const healthPath = {
     get: {
       tags: ['health'],
       summary: 'Liveness check',
+      security: [],
       responses: {
         200: {
           description: 'OK',
@@ -751,6 +925,11 @@ const openapiSpec = {
       'Express + Supabase backend. Most resources are generic CRUD endpoints generated from src/config/resources.js; /reports/* and the /inventory-items/{id}/* sub-resources are hand-written.',
   },
   servers: [{ url: '/api' }],
+  // Every route requires a Bearer token now except the few marked
+  // `security: []` below (register/login/refresh/health). Previously most
+  // of this API (all generic resources, brands, reports, inventory-item
+  // sub-resources) had no auth at all — this was a real gap, not just docs.
+  security: [{ bearerAuth: [] }],
   components: {
     securitySchemes: {
       bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', description: 'Supabase access_token from /auth/login, /auth/register, or /auth/refresh' },
@@ -762,6 +941,7 @@ const openapiSpec = {
     { name: 'users' },
     { name: 'roles' },
     { name: 'brands' },
+    { name: 'products' },
     ...resources.map((r) => ({ name: r.path })),
     { name: 'reports' },
   ],
@@ -771,6 +951,7 @@ const openapiSpec = {
     ...usersPaths,
     ...rolesPaths,
     ...brandsPaths,
+    ...productsPaths,
     ...resourcePaths,
     ...reportsPaths,
     ...inventoryItemExtraPaths,

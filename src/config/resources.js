@@ -4,7 +4,9 @@ module.exports = [
   { table: 'categories', path: 'categories', writable: true },
   { table: 'suppliers', path: 'suppliers', writable: true },
   { table: 'marketplaces', path: 'marketplaces', writable: true },
-  { table: 'products', path: 'products', writable: true },
+  // 'products' is intentionally not listed here — it has its own controller/
+  // routes (productsController.js / productsRoutes.js) to support image
+  // uploads, mounted explicitly in app.js like 'brands'.
   // softDelete: DELETE sets is_active = false instead of removing the row;
   // GET list hides inactive rows unless ?includeInactive=true is passed.
   { table: 'inventory_items', path: 'inventory-items', writable: true, softDelete: true },
