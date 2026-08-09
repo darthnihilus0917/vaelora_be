@@ -16,11 +16,23 @@ function parseListParams(query) {
   };
 }
 
+// Keeps only whitelisted keys from the request body. The DB client is
+// service_role (bypasses RLS), so this whitelist is what actually stops a
+// caller from writing to columns the API doesn't mean to expose (id,
+// created_at, or anything else that happens to exist on the table).
+function pickFields(body, fields) {
+  const picked = {};
+  fields.forEach((field) => {
+    if (body[field] !== undefined) picked[field] = body[field];
+  });
+  return picked;
+}
+
 // Builds getAll/getById/create/update/remove handlers for a Supabase table.
 // Read-only resources (writable: false) only get getAll.
 // softDelete: DELETE becomes an is_active=false update instead of a real
 // delete, and GET list hides inactive rows unless ?includeInactive=true.
-function buildCrudHandlers(table, { writable = true, softDelete = false } = {}) {
+function buildCrudHandlers(table, { writable = true, softDelete = false, fields = [] } = {}) {
   const getAll = async (req, res, next) => {
     try {
       const listParams = parseListParams(req.query);
@@ -78,7 +90,8 @@ function buildCrudHandlers(table, { writable = true, softDelete = false } = {}) 
 
   const create = async (req, res, next) => {
     try {
-      const { data, error } = await supabase.from(table).insert([req.body]).select().single();
+      const payload = pickFields(req.body, fields);
+      const { data, error } = await supabase.from(table).insert([payload]).select().single();
 
       if (error) throw { status: 400, message: error.message };
 
@@ -91,7 +104,8 @@ function buildCrudHandlers(table, { writable = true, softDelete = false } = {}) 
   const update = async (req, res, next) => {
     try {
       const { id } = req.params;
-      const { data, error } = await supabase.from(table).update(req.body).eq('id', id).select().single();
+      const payload = pickFields(req.body, fields);
+      const { data, error } = await supabase.from(table).update(payload).eq('id', id).select().single();
 
       if (error) throw { status: 400, message: error.message };
       if (!data) throw { status: 404, message: `Record not found in ${table}` };

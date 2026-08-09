@@ -3,6 +3,24 @@ const { uploadImage, deleteImage } = require('../utils/r2Storage');
 
 const IMAGE_COLUMNS = 'id, url, is_default, sort_order, created_at';
 
+// Whitelists which body keys create/update actually write to the products
+// table (id/created_at excluded as server-managed). The DB client is
+// service_role (bypasses RLS), so without this a caller could set any column
+// that exists on the table, not just the ones meant to be API-writable.
+const PRODUCT_FIELDS = [
+  'sku', 'brand', 'model_no', 'product_name', 'category_id', 'gender_label',
+  'movement_type', 'case_size', 'condition_label', 'completeness',
+  'description', 'is_discontinued', 'brand_id',
+];
+
+function pickFields(body, fields) {
+  const picked = {};
+  fields.forEach((field) => {
+    if (body[field] !== undefined) picked[field] = body[field];
+  });
+  return picked;
+}
+
 // Pagination/sorting is opt-in, same convention as every other list endpoint
 // in this API: no page/limit/sortBy -> plain array, so existing callers
 // (e.g. dropdown lookups) are unaffected.
@@ -71,7 +89,8 @@ const getById = async (req, res, next) => {
 
 const create = async (req, res, next) => {
   try {
-    const { data, error } = await supabase.from('products').insert([req.body]).select().single();
+    const payload = pickFields(req.body, PRODUCT_FIELDS);
+    const { data, error } = await supabase.from('products').insert([payload]).select().single();
 
     if (error) throw { status: 400, message: error.message };
 
@@ -84,7 +103,8 @@ const create = async (req, res, next) => {
 const update = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { data, error } = await supabase.from('products').update(req.body).eq('id', id).select().single();
+    const payload = pickFields(req.body, PRODUCT_FIELDS);
+    const { data, error } = await supabase.from('products').update(payload).eq('id', id).select().single();
 
     if (error) throw { status: 400, message: error.message };
     if (!data) throw { status: 404, message: 'Record not found in products' };

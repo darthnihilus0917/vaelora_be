@@ -18,6 +18,11 @@ const { errorHandler, notFound } = require('./middleware/errorHandler');
 
 const app = express();
 
+// Runs behind Vercel's proxy -- without this, req.ip is the proxy's address
+// (breaks per-IP rate limiting) and express-rate-limit refuses to start
+// since X-Forwarded-For would be attacker-controlled otherwise.
+app.set('trust proxy', 1);
+
 // Core middleware
 app.use(cors({
   origin: [
@@ -47,8 +52,8 @@ app.use('/api/inventory-items', inventoryItemExtraRoutes);
 app.use('/api/brands', brandsRoutes);
 app.use('/api/products', productsRoutes);
 
-resources.forEach(({ table, path, writable, softDelete }) => {
-  app.use(`/api/${path}`, buildResourceRouter(table, { writable, softDelete }));
+resources.forEach(({ table, path, writable, softDelete, fields }) => {
+  app.use(`/api/${path}`, buildResourceRouter(table, { writable, softDelete, fields }));
 });
 
 // 404 + error handling (must be registered last)
