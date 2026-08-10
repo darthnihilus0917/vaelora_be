@@ -584,6 +584,61 @@ const productsPaths = {
   },
 };
 
+const publicProductRecord = {
+  type: 'object',
+  properties: {
+    id: { type: 'integer' },
+    sku: { type: 'string' },
+    name: { type: 'string' },
+    brand: { type: 'string', nullable: true },
+    model_no: { type: 'string', nullable: true },
+    category: { type: 'string', nullable: true },
+    condition_label: { type: 'string', nullable: true },
+    movement_type: { type: 'string', nullable: true },
+    case_size: { type: 'string', nullable: true },
+    gender_label: { type: 'string', nullable: true },
+    description: { type: 'string', nullable: true },
+    price: { type: 'number', nullable: true, description: 'product_stock_summary.average_current_selling_price — never cost/margin fields' },
+    images: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { url: { type: 'string', format: 'uri' }, is_default: { type: 'boolean' }, sort_order: { type: 'integer' } },
+      },
+    },
+    created_at: { type: 'string', format: 'date-time' },
+  },
+};
+
+const publicProductsPaths = {
+  '/public/products': {
+    get: {
+      tags: ['public'],
+      summary: 'Public storefront catalog — no authentication',
+      description:
+        'Genuinely anonymous, no Authorization header required or checked. Server-side filtered to is_discontinued=false and available_quantity > 0 '
+        + '(via product_stock_summary) — never returns cost/margin fields. See docs/public-storefront-backend-handover.md.',
+      security: [],
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope({ type: 'array', items: publicProductRecord }) } } },
+      },
+    },
+  },
+  '/public/products/{id}': {
+    get: {
+      tags: ['public'],
+      summary: 'Single public product — no authentication',
+      description: '404 if the id does not exist, is discontinued, or has no available stock — a delisted product should not resolve.',
+      security: [],
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
+      responses: {
+        200: { description: 'OK', content: { 'application/json': { schema: SuccessEnvelope(publicProductRecord) } } },
+        404: errorResponses[404],
+      },
+    },
+  },
+};
+
 const sessionSchema = {
   type: 'object',
   properties: {
@@ -942,6 +997,7 @@ const openapiSpec = {
     { name: 'roles' },
     { name: 'brands' },
     { name: 'products' },
+    { name: 'public' },
     ...resources.map((r) => ({ name: r.path })),
     { name: 'reports' },
   ],
@@ -952,6 +1008,7 @@ const openapiSpec = {
     ...rolesPaths,
     ...brandsPaths,
     ...productsPaths,
+    ...publicProductsPaths,
     ...resourcePaths,
     ...reportsPaths,
     ...inventoryItemExtraPaths,
