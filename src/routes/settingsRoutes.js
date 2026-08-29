@@ -1,7 +1,7 @@
 const express = require('express');
 const { authenticate, requireRole } = require('../middleware/auth');
 const upload = require('../middleware/upload');
-const { getHeroImage, uploadHeroImage, deleteHeroImage } = require('../controllers/siteSettingsController');
+const { getHeroImage, uploadHeroImage, selectHeroImage, deleteHeroImage } = require('../controllers/siteSettingsController');
 
 const router = express.Router();
 
@@ -19,6 +19,7 @@ router.post(
   },
   uploadHeroImage,
 );
+router.post('/hero-image/select', requireRole('admin', 'superadmin'), selectHeroImage);
 router.delete('/hero-image', requireRole('admin', 'superadmin'), deleteHeroImage);
 
 module.exports = router;

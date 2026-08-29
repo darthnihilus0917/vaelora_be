@@ -72,6 +72,45 @@ const uploadHeroImage = async (req, res, next) => {
   }
 };
 
+// POST /settings/hero-image/select (JSON body { imageId }) — admin/
+// superadmin only. Points the hero image at an existing product_images row
+// instead of uploading a new file. Deliberately leaves
+// hero_image_storage_key null: that R2 object belongs to a product's own
+// gallery, so this setting must never delete it (see uploadHeroImage /
+// deleteHeroImage, which only ever delete a storage key they set here).
+const selectHeroImage = async (req, res, next) => {
+  try {
+    const { imageId } = req.body;
+    if (!imageId) throw { status: 400, message: 'imageId is required' };
+
+    const { data: image, error: imageError } = await supabase
+      .from('product_images')
+      .select('url')
+      .eq('id', imageId)
+      .single();
+    if (imageError || !image) throw { status: 404, message: 'Product image not found' };
+
+    const previous = await fetchSettingsRow();
+
+    const { data, error } = await supabase
+      .from('site_settings')
+      .update({ hero_image_url: image.url, hero_image_storage_key: null, updated_at: new Date().toISOString() })
+      .eq('id', SETTINGS_ID)
+      .select()
+      .single();
+
+    if (error) throw { status: 400, message: error.message };
+
+    if (previous.hero_image_storage_key) {
+      await deleteImage(previous.hero_image_storage_key).catch(() => {});
+    }
+
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+};
+
 // DELETE /settings/hero-image — admin/superadmin only. Clears the setting.
 const deleteHeroImage = async (req, res, next) => {
   try {
@@ -96,4 +135,4 @@ const deleteHeroImage = async (req, res, next) => {
   }
 };
 
-module.exports = { getHeroImage, getPublicHeroImage, uploadHeroImage, deleteHeroImage };
+module.exports = { getHeroImage, getPublicHeroImage, uploadHeroImage, selectHeroImage, deleteHeroImage };
