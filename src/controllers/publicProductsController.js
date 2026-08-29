@@ -45,12 +45,18 @@ function mapProduct(product, stock) {
 
 // "In stock" is computed from product_stock_summary (already aggregates
 // inventory_items by status) rather than querying inventory_items directly.
+//
+// Deliberately NOT filtering on is_discontinued: that flag means "we won't
+// reorder this model," not "stop selling what's left" — a discontinued
+// product with real available_quantity is still physically sellable stock,
+// and hiding it here just makes it undead inventory nobody can buy. Stock
+// alone (available_quantity > 0, checked below) is the only gate; once the
+// last unit sells, it drops out of this list on its own.
 const getAll = async (req, res, next) => {
   try {
     const { data: products, error } = await supabase
       .from('products')
-      .select(PRODUCT_SELECT)
-      .eq('is_discontinued', false);
+      .select(PRODUCT_SELECT);
     if (error) throw { status: 400, message: error.message };
 
     const { data: stockRows, error: stockError } = await supabase
@@ -71,8 +77,10 @@ const getAll = async (req, res, next) => {
   }
 };
 
-// 404 (not just "no stock") for discontinued/sold-out ids too — a delisted
-// product shouldn't resolve to a page that confirms it ever existed.
+// 404 (not just "no stock") for sold-out or nonexistent ids — a delisted
+// product shouldn't resolve to a page that confirms it ever existed. Not
+// gated on is_discontinued for the same reason as getAll above — a
+// discontinued product with real stock is still a valid page to land on.
 const getById = async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -81,7 +89,6 @@ const getById = async (req, res, next) => {
       .from('products')
       .select(PRODUCT_SELECT)
       .eq('id', id)
-      .eq('is_discontinued', false)
       .single();
     if (error || !product) throw { status: 404, message: 'Product not found' };
 
