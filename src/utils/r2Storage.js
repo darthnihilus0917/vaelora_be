@@ -10,8 +10,29 @@ function buildKey(productId, originalName) {
   return `products/${productId}/${crypto.randomUUID()}${ext}`;
 }
 
+// Same shape as buildKey, but for images that aren't scoped to a product
+// (e.g. the storefront hero image) — kept in a `site/` namespace so these
+// keys can never collide with a real products/<id>/... key.
+function buildSiteKey(name, originalName) {
+  const ext = (String(originalName).match(/\.[a-zA-Z0-9]+$/) || [''])[0].toLowerCase();
+  return `site/${name}/${crypto.randomUUID()}${ext}`;
+}
+
 async function uploadImage(productId, file) {
   const key = buildKey(productId, file.originalname);
+
+  await r2Client.send(new PutObjectCommand({
+    Bucket: BUCKET,
+    Key: key,
+    Body: file.buffer,
+    ContentType: file.mimetype,
+  }));
+
+  return { key, url: `${PUBLIC_URL}/${key}` };
+}
+
+async function uploadSiteImage(name, file) {
+  const key = buildSiteKey(name, file.originalname);
 
   await r2Client.send(new PutObjectCommand({
     Bucket: BUCKET,
@@ -27,4 +48,4 @@ async function deleteImage(key) {
   await r2Client.send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
 }
 
-module.exports = { uploadImage, deleteImage };
+module.exports = { uploadImage, uploadSiteImage, deleteImage };

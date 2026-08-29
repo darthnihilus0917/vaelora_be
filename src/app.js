@@ -10,6 +10,7 @@ const inventoryItemExtraRoutes = require('./routes/inventoryItemExtraRoutes');
 const brandsRoutes = require('./routes/brandsRoutes');
 const productsRoutes = require('./routes/productsRoutes');
 const publicRoutes = require('./routes/publicRoutes');
+const settingsRoutes = require('./routes/settingsRoutes');
 const authRoutes = require('./routes/authRoutes');
 const usersRoutes = require('./routes/usersRoutes');
 const rolesRoutes = require('./routes/rolesRoutes');
@@ -53,6 +54,7 @@ app.use('/api/inventory-items', inventoryItemExtraRoutes);
 app.use('/api/brands', brandsRoutes);
 app.use('/api/products', productsRoutes);
 app.use('/api/public', publicRoutes);
+app.use('/api/settings', settingsRoutes);
 
 resources.forEach(({ table, path, writable, softDelete, fields }) => {
   app.use(`/api/${path}`, buildResourceRouter(table, { writable, softDelete, fields }));

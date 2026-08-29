@@ -1,5 +1,6 @@
 const express = require('express');
 const { getAll, getById } = require('../controllers/publicProductsController');
+const { getPublicHeroImage } = require('../controllers/siteSettingsController');
 
 const router = express.Router();
 
@@ -7,5 +8,6 @@ const router = express.Router();
 // See docs/public-storefront-backend-handover.md.
 router.get('/products', getAll);
 router.get('/products/:id', getById);
+router.get('/hero-image', getPublicHeroImage);
 
 module.exports = router;
