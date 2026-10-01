@@ -26,12 +26,21 @@ const app = express();
 app.set('trust proxy', 1);
 
 // Core middleware
+// Extra allowed origins (e.g. the custom domain) come from CORS_ORIGINS, a
+// comma-separated list -- so pointing a new domain at the frontend only needs
+// an env change on Vercel, not a code change.
+const allowedOrigins = [
+  'https://vaelorafe.netlify.app',
+  'http://localhost:4000',
+  'http://localhost:5173',
+  ...(process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((o) => o.trim().replace(/\/+$/, ''))
+    .filter(Boolean),
+];
+
 app.use(cors({
-  origin: [
-    'https://vaelorafe.netlify.app',
-    'http://localhost:4000',
-    'http://localhost:5173',
-  ],
+  origin: allowedOrigins,
   credentials: true,
 }));
 app.use(express.json());
