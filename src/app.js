@@ -31,6 +31,8 @@ app.set('trust proxy', 1);
 // an env change on Vercel, not a code change.
 const allowedOrigins = [
   'https://vaelorafe.netlify.app',
+  'https://vaeloramanila.com',
+  'https://www.vaeloramanila.com',
   'http://localhost:4000',
   'http://localhost:5173',
   ...(process.env.CORS_ORIGINS || '')
