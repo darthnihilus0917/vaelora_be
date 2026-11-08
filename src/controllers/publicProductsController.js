@@ -38,6 +38,9 @@ function mapProduct(product, stock) {
     gender_label: product.gender_label ?? null,
     description: product.description ?? null,
     price: stock ? Number(stock.average_current_selling_price) : null,
+    // Units currently available (>0 for anything this endpoint returns) — lets
+    // the storefront say "Only 1 available". Not a cost/margin field.
+    available_quantity: stock ? Number(stock.available_quantity) : null,
     images,
     created_at: product.created_at,
   };

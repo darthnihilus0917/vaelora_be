@@ -599,6 +599,7 @@ const publicProductRecord = {
     gender_label: { type: 'string', nullable: true },
     description: { type: 'string', nullable: true },
     price: { type: 'number', nullable: true, description: 'product_stock_summary.average_current_selling_price — never cost/margin fields' },
+    available_quantity: { type: 'integer', nullable: true, description: 'product_stock_summary.available_quantity — units in stock' },
     images: {
       type: 'array',
       items: {
